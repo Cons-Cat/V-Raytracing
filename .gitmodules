@@ -1,0 +1,3 @@
+[submodule "kitty_v"]
+	path = kitty_v
+	url = https://github.com/cons-cat/kitty_v.git
