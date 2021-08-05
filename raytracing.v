@@ -100,12 +100,9 @@ fn (r Ray) color() Vec3 {
 }
 
 fn write_color(mut buffer []byte, rgb Vec3) {
-	red := f32(rgb.x()) / (image_width - 1)
-	green := f32(rgb.y()) / (image_height - 1)
-	blue := rgb.z()
-	buffer << byte(255.999 * red)
-	buffer << byte(255.999 * green)
-	buffer << byte(255.999 * blue)
+	buffer << byte(255.999 * rgb.x())
+	buffer << byte(255.999 * rgb.y())
+	buffer << byte(255.999 * rgb.z())
 }
 
 fn main() {
