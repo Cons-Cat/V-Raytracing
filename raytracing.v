@@ -4,8 +4,9 @@ import math
 import kitty
 
 const (
-	image_width  = 256
-	image_height = 256
+	aspect_ratio = f32(16.0) / 9.0
+	image_width  = 400
+	image_height = int(image_width / aspect_ratio)
 )
 
 struct Vec3 {
@@ -45,12 +46,16 @@ fn (v Vec3) - (u Vec3) Vec3 {
 	}
 }
 
-fn (mut v Vec3) scale(t f32) {
-	v.data = [v.x() * t, v.y() * t, v.z() * t]!
+fn (v Vec3) scale(t f32) Vec3 {
+	return Vec3{
+		data: [v.x() * t, v.y() * t, v.z() * t]!
+	}
 }
 
-fn (mut v Vec3) divide(t f32) {
-	v.data = [v.x() / t, v.y() / t, v.z() / t]!
+fn (v Vec3) divide(t f32) Vec3 {
+	return Vec3{
+		data: [v.x() / t, v.y() / t, v.z() / t]!
+	}
 }
 
 fn (v Vec3) len() f32 {
@@ -67,10 +72,31 @@ fn cross(v Vec3, u Vec3) Vec3 {
 	}
 }
 
-fn normalize(v Vec3) Vec3 {
-	mut new_vector := v
-	new_vector.divide(v.len())
-	return new_vector
+fn (v Vec3) normalize() Vec3 {
+	return v.divide(v.len())
+    // sum := v.x() + v.y() + v.z()
+	// return v.divide(sum)
+}
+
+struct Ray {
+pub:
+	origin    Vec3
+	direction Vec3
+}
+
+fn (r Ray) at(t f32) Vec3 {
+	return r.origin + r.direction.scale(t)
+}
+
+fn (r Ray) color() Vec3 {
+	unit := r.direction.normalize()
+	t := 0.5 * (unit.y() + 1.0)
+	return Vec3{
+		data: [f32(1), 1, 1]!
+	}.scale(1.0 - t) + Vec3{
+		// Background blue
+		data: [f32(0.5), 0.7, 1.0]!
+	}.scale(t)
 }
 
 fn write_color(mut buffer []byte, rgb Vec3) {
@@ -83,11 +109,35 @@ fn write_color(mut buffer []byte, rgb Vec3) {
 }
 
 fn main() {
+	// Camera
+	viewport_height := f32(2.0)
+	viewport_width := aspect_ratio * viewport_height
+	focal_length := f32(1.0)
+	origin := Vec3{
+		data: [f32(0), 0, 0]!
+	}
+	horizontal := Vec3{
+		data: [viewport_width, 0, 0]!
+	}
+	vertical := Vec3{
+		data: [f32(0), viewport_height, 0]!
+	}
+	lower_left_corner := origin - horizontal.divide(2) - vertical.divide(2) - Vec3{
+		data: [f32(0), 0, focal_length]!
+	}
+	// Render
 	mut rgb_buffer := []byte{len: 0, cap: image_width * image_height}
-	for j in 0 .. image_width {
-		for i in 0 .. image_height {
-			write_color(mut rgb_buffer, Vec3{ data: [f32(i), j, 0.25]! })
+	for j := image_height - 1; j >= 0; j-- {
+		for i in 0 .. image_width {
+			u := f32(i) / (image_width - 1)
+			v := f32(j) / (image_height - 1)
+			r := Ray{
+				origin: origin
+				direction: lower_left_corner + horizontal.scale(u) + vertical.scale(v) - origin
+			}
+			pixel_color := r.color()
+			write_color(mut rgb_buffer, pixel_color)
 		}
 	}
-	kitty.print_rgb_at_point(rgb_buffer, image_width, image_height)
+	kitty.print_rgb_at_point(rgb_buffer, u32(image_width), u32(image_height))
 }
