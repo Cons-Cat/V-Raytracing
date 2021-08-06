@@ -14,6 +14,12 @@ mut:
 	data [3]f32
 }
 
+fn make_vec(x f32, y f32, z f32) Vec3 {
+	return Vec3{
+		data: [x, y, z]!
+	}
+}
+
 fn (v Vec3) x() f32 {
 	return v.data[0]
 }
@@ -27,35 +33,19 @@ fn (v Vec3) z() f32 {
 }
 
 fn (v Vec3) + (u Vec3) Vec3 {
-	return Vec3{
-		data: [
-			v.x() + u.x(),
-			v.y() + u.y(),
-			v.z() + u.z(),
-		]!
-	}
+	return make_vec(v.x() + u.x(), v.y() + u.y(), v.z() + u.z())
 }
 
 fn (v Vec3) - (u Vec3) Vec3 {
-	return Vec3{
-		data: [
-			v.x() - u.x(),
-			v.y() - u.y(),
-			v.z() - u.z(),
-		]!
-	}
+	return make_vec(v.x() - u.x(), v.y() - u.y(), v.z() - u.z())
 }
 
 fn (v Vec3) * (u Vec3) Vec3 {
-	return Vec3{
-		data: [v.x() * u.x(), v.y() * u.y(), v.z() * u.z()]!
-	}
+	return make_vec(v.x() * u.x(), v.y() * u.y(), v.z() * u.z())
 }
 
 fn (v Vec3) scale(t f32) Vec3 {
-	return Vec3{
-		data: [v.x() * t, v.y() * t, v.z() * t]!
-	}
+	return make_vec(v.x() * t, v.y() * t, v.z() * t)
 }
 
 fn (v Vec3) divide(t f32) Vec3 {
@@ -71,13 +61,7 @@ fn dot(v Vec3, u Vec3) f32 {
 }
 
 fn cross(v Vec3, u Vec3) Vec3 {
-	return Vec3{
-		data: [
-			u.y() * v.z() - u.z() * v.y(),
-			u.z() * v.x() - u.x() * v.z(),
-			u.x() * v.y() - u.y() * v.x(),
-		]!
-	}
+	return make_vec(u.y() * v.z() - u.z() * v.y(), u.z() * v.x() - u.x() * v.z(), u.x() * v.y() - u.y() * v.x())
 }
 
 fn (v Vec3) normalize() Vec3 {
@@ -88,6 +72,13 @@ struct Ray {
 pub:
 	origin    Vec3
 	direction Vec3
+}
+
+fn make_ray(ori Vec3, dir Vec3) Ray {
+	return Ray{
+		origin: ori
+		direction: dir
+	}
 }
 
 fn (r Ray) at(t f32) Vec3 {
@@ -108,27 +99,17 @@ fn (r Ray) hit_sphere(center Vec3, radius f32) f32 {
 }
 
 fn (r Ray) color() Vec3 {
-	sphere := Vec3{
-		data: [f32(0), 0, -1]!
-	}
+	sphere := make_vec(f32(0), 0, -1)
 	mut t := r.hit_sphere(sphere, f32(0.5))
 	if t > 0 {
-		normal := (r.at(t) - Vec3{
-			data: [f32(0), 0, -1]!
-		}).normalize()
-		return Vec3{
-			data: [normal.x() + 1, normal.y() + 1, normal.z() + 1]!
-		}.divide(2)
+		normal := (r.at(t) - sphere).normalize()
+		return make_vec(normal.x() + 1, normal.y() + 1, normal.z() + 1).divide(2)
 	}
 
 	unit := r.direction.normalize()
 	t = (unit.y() + 1) / 2
-	return Vec3{
-		data: [f32(1), 1, 1]!
-	}.scale(1 - t) + Vec3{
-		// Background blue
-		data: [f32(0.5), 0.7, 1.0]!
-	}.scale(t)
+	return make_vec(f32(1), 1, 1).scale(1 - t) + // Background blue
+	make_vec(f32(0.5), 0.7, 1.0).scale(t)
 }
 
 fn write_color(mut buffer []byte, rgb Vec3) {
@@ -142,18 +123,11 @@ fn main() {
 	viewport_height := f32(2.0)
 	viewport_width := aspect_ratio * viewport_height
 	focal_length := f32(1.0)
-	origin := Vec3{
-		data: [f32(0), 0, 0]!
-	}
-	horizontal := Vec3{
-		data: [viewport_width, 0, 0]!
-	}
-	vertical := Vec3{
-		data: [f32(0), viewport_height, 0]!
-	}
-	lower_left_corner := origin - horizontal.divide(2) - vertical.divide(2) - Vec3{
-		data: [f32(0), 0, focal_length]!
-	}
+	origin := make_vec(f32(0), 0, 0)
+	horizontal := make_vec(viewport_width, 0, 0)
+	vertical := make_vec(f32(0), viewport_height, 0)
+	lower_left_corner := origin - horizontal.divide(2) - vertical.divide(2) - make_vec(f32(0),
+		0, focal_length)
 	// Rendering
 	// This cap initilization does not work correctly with TCC, but it does for Clang and GCC.
 	// mut rgb_buffer := []byte{len: 0, cap: image_width * image_height}
@@ -163,10 +137,7 @@ fn main() {
 			// Baking UV pixels
 			u := f32(i) / (image_width - 1)
 			v := f32(j) / (image_height - 1)
-			r := Ray{
-				origin: origin
-				direction: lower_left_corner + horizontal.scale(u) + vertical.scale(v) - origin
-			}
+			r := make_ray(origin, lower_left_corner + horizontal.scale(u) + vertical.scale(v) - origin)
 			pixel_color := r.color()
 			write_color(mut rgb_buffer, pixel_color)
 		}
