@@ -46,6 +46,12 @@ fn (v Vec3) - (u Vec3) Vec3 {
 	}
 }
 
+fn (v Vec3) * (u Vec3) Vec3 {
+	return Vec3{
+		data: [v.x() * u.x(), v.y() * u.y(), v.z() * u.z()]!
+	}
+}
+
 fn (v Vec3) scale(t f32) Vec3 {
 	return Vec3{
 		data: [v.x() * t, v.y() * t, v.z() * t]!
@@ -53,13 +59,15 @@ fn (v Vec3) scale(t f32) Vec3 {
 }
 
 fn (v Vec3) divide(t f32) Vec3 {
-	return Vec3{
-		data: [v.x() / t, v.y() / t, v.z() / t]!
-	}
+	return v.scale((f32(1.0) / t))
 }
 
 fn (v Vec3) len() f32 {
 	return math.sqrtf(v.x() * v.x() + v.y() * v.y() + v.z() * v.z())
+}
+
+fn dot(v Vec3, u Vec3) f32 {
+	return v.x() * u.x() + v.y() * u.y() + v.z() * u.z()
 }
 
 fn cross(v Vec3, u Vec3) Vec3 {
@@ -74,8 +82,6 @@ fn cross(v Vec3, u Vec3) Vec3 {
 
 fn (v Vec3) normalize() Vec3 {
 	return v.divide(v.len())
-    // sum := v.x() + v.y() + v.z()
-	// return v.divide(sum)
 }
 
 struct Ray {
@@ -88,7 +94,23 @@ fn (r Ray) at(t f32) Vec3 {
 	return r.origin + r.direction.scale(t)
 }
 
+fn (r Ray) hit_sphere(center Vec3, radius f32) bool {
+	origin_center := r.origin - center
+	a := dot(r.direction, r.direction)
+	b := dot(origin_center, r.direction) * f32(2.0)
+	c := dot(origin_center, origin_center) - radius * radius
+	discriminant := b * b - (a * c) * f32(4.0)
+	return discriminant > 0
+}
+
 fn (r Ray) color() Vec3 {
+   	sphere := Vec3{
+		   data:[f32(0),0,-1]!
+	}
+	if r.hit_sphere(sphere, f32(0.5)){
+		return Vec3{data:[f32(1),0,0]!}
+	}
+
 	unit := r.direction.normalize()
 	t := 0.5 * (unit.y() + 1.0)
 	return Vec3{
@@ -125,7 +147,11 @@ fn main() {
 	// Render
 	mut rgb_buffer := []byte{len: 0, cap: image_width * image_height}
 	for j := image_height - 1; j >= 0; j-- {
-		for i in 0 .. image_width {
+		for i := 0; i < image_width; i++ {
+		// for i in 0 .. image_width {
+			// println('${i + j} / ${image_width + image_height}')
+
+			// Baking UV pixels
 			u := f32(i) / (image_width - 1)
 			v := f32(j) / (image_height - 1)
 			r := Ray{
