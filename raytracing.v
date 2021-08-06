@@ -116,6 +116,47 @@ fn (r Ray) color() Vec3 {
 	make_vec(f32(0.5), 0.7, 1.0).scale(t)
 }
 
+struct HitRecord {
+pub mut:
+	   point Vec3
+	   normal Vec3
+	   t f32
+}
+
+interface Hittable {
+	hit(ray &Ray, t_min f32, t_max f32, mut hit_record &HitRecord) bool
+}
+
+struct Sphere {
+	center Vec3
+	radius f32
+}
+
+fn make_sphere(center Vec3, radius f32) Sphere {
+   return Sphere{
+		center: center
+		radius: radius
+	}
+}
+
+fn (s Sphere) hit(ray &Ray, t_min f32, t_max f32, mut hit_record &HitRecord) bool {
+	origin_center := ray.origin - s.center
+	a := ray.direction.len_squared()
+	half_b := dot(origin_center, ray.direction)
+	c := origin_center.len_squared() - s.radius * s.radius
+	discriminant := half_b * half_b - a * c
+	discriminant_sqrt := math.sqrtf(discriminant)
+	root := (-half_b - discriminant_sqrt)
+	if discriminant < 0 {
+		return false
+	} else {
+	    hit_record.t = root
+		hit_record.point = ray.at(root)
+		hit_record.normal = (hit_record.point - s.center).divide(s.radius)
+		return true
+	}
+}
+
 fn write_color(mut buffer []byte, rgb Vec3) {
 	buffer << byte(255.999 * rgb.x())
 	buffer << byte(255.999 * rgb.y())
