@@ -144,8 +144,10 @@ fn main() {
 	lower_left_corner := origin - horizontal.divide(2) - vertical.divide(2) - Vec3{
 		data: [f32(0), 0, focal_length]!
 	}
-	// Render
-	mut rgb_buffer := []byte{len: 0, cap: image_width * image_height}
+	// Rendering
+	// This cap initilization does not work correctly with TCC, but it does for Clang and GCC.
+	// mut rgb_buffer := []byte{len: 0, cap: image_width * image_height}
+	mut rgb_buffer := []byte{}
 	for j := image_height - 1; j >= 0; j-- {
 		for i := 0; i < image_width; i++ {
 		// for i in 0 .. image_width {
