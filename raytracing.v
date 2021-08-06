@@ -94,28 +94,38 @@ fn (r Ray) at(t f32) Vec3 {
 	return r.origin + r.direction.scale(t)
 }
 
-fn (r Ray) hit_sphere(center Vec3, radius f32) bool {
+fn (r Ray) hit_sphere(center Vec3, radius f32) f32 {
 	origin_center := r.origin - center
 	a := dot(r.direction, r.direction)
-	b := dot(origin_center, r.direction) * f32(2.0)
+	b := dot(origin_center, r.direction) * f32(2)
 	c := dot(origin_center, origin_center) - radius * radius
-	discriminant := b * b - (a * c) * f32(4.0)
-	return discriminant > 0
+	discriminant := b * b - (a * c * f32(4))
+	if discriminant < 0 {
+		return -1
+	} else {
+		return (-b - math.sqrtf(discriminant)) / (a * 2)
+	}
 }
 
 fn (r Ray) color() Vec3 {
-   	sphere := Vec3{
-		   data:[f32(0),0,-1]!
+	sphere := Vec3{
+		data: [f32(0), 0, -1]!
 	}
-	if r.hit_sphere(sphere, f32(0.5)){
-		return Vec3{data:[f32(1),0,0]!}
+	mut t := r.hit_sphere(sphere, f32(0.5))
+	if t > 0 {
+		normal := (r.at(t) - Vec3{
+			data: [f32(0), 0, -1]!
+		}).normalize()
+		return Vec3{
+			data: [normal.x() + 1, normal.y() + 1, normal.z() + 1]!
+		}.divide(2)
 	}
 
 	unit := r.direction.normalize()
-	t := 0.5 * (unit.y() + 1.0)
+	t = (unit.y() + 1) / 2
 	return Vec3{
 		data: [f32(1), 1, 1]!
-	}.scale(1.0 - t) + Vec3{
+	}.scale(1 - t) + Vec3{
 		// Background blue
 		data: [f32(0.5), 0.7, 1.0]!
 	}.scale(t)
@@ -150,9 +160,6 @@ fn main() {
 	mut rgb_buffer := []byte{}
 	for j := image_height - 1; j >= 0; j-- {
 		for i := 0; i < image_width; i++ {
-		// for i in 0 .. image_width {
-			// println('${i + j} / ${image_width + image_height}')
-
 			// Baking UV pixels
 			u := f32(i) / (image_width - 1)
 			v := f32(j) / (image_height - 1)
