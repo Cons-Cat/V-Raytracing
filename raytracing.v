@@ -52,8 +52,12 @@ fn (v Vec3) divide(t f32) Vec3 {
 	return v.scale((f32(1.0) / t))
 }
 
+fn (v Vec3) len_squared() f32 {
+   return v.x() * v.x() + v.y() * v.y() + v.z() * v.z()
+}
+
 fn (v Vec3) len() f32 {
-	return math.sqrtf(v.x() * v.x() + v.y() * v.y() + v.z() * v.z())
+	return math.sqrtf(v.len_squared())
 }
 
 fn dot(v Vec3, u Vec3) f32 {
@@ -87,14 +91,14 @@ fn (r Ray) at(t f32) Vec3 {
 
 fn (r Ray) hit_sphere(center Vec3, radius f32) f32 {
 	origin_center := r.origin - center
-	a := dot(r.direction, r.direction)
-	b := dot(origin_center, r.direction) * f32(2)
-	c := dot(origin_center, origin_center) - radius * radius
-	discriminant := b * b - (a * c * f32(4))
+	a := r.direction.len_squared()
+	half_b := dot(origin_center, r.direction)
+	c := origin_center.len_squared() - radius * radius
+	discriminant := half_b * half_b - a * c
 	if discriminant < 0 {
 		return -1
 	} else {
-		return (-b - math.sqrtf(discriminant)) / (a * 2)
+		return (-half_b - math.sqrtf(discriminant)) / a
 	}
 }
 
