@@ -7,6 +7,7 @@ const (
 	aspect_ratio = f32(16.0) / 9.0
 	image_width  = 400
 	image_height = int(image_width / aspect_ratio)
+	infinity     = f32(math.inf(1))
 )
 
 struct Vec3 {
@@ -93,28 +94,15 @@ fn (r Ray) at(t f32) Vec3 {
 	return r.origin + r.direction.scale(t)
 }
 
-fn (r Ray) hit_sphere(center Vec3, radius f32) f32 {
-	origin_center := r.origin - center
-	a := r.direction.len_squared()
-	half_b := dot(origin_center, r.direction)
-	c := origin_center.len_squared() - radius * radius
-	discriminant := half_b * half_b - a * c
-	if discriminant < 0 {
-		return -1
-	} else {
-		return (-half_b - math.sqrtf(discriminant)) / a
-	}
-}
-
 fn (r Ray) color(hittable &Hittable) Vec3 {
 	mut hit_record := HitRecord{}
-	if hittable.hit(r, 0, f32(math.inf(1)), mut hit_record) {
+	if hittable.hit(r, 0, infinity, mut hit_record) {
 		return (hit_record.normal + make_vec(f32(1), 1, 1)).divide(2)
 	}
 
+	// Make a background gradient
 	unit := r.direction.normalize()
 	t := (unit.y() + 1) / 2
-	// Return a background gradient
 	return make_vec(f32(1), 1, 1).scale(1 - t) + // Background blue
 	make_vec(f32(0.5), 0.7, 1.0).scale(t)
 }
@@ -160,7 +148,13 @@ fn (s Sphere) hit(ray &Ray, t_min f32, t_max f32, mut hit_record HitRecord) bool
 		return false
 	}
 	discriminant_sqrt := math.sqrtf(discriminant)
-	nearest_sqrt := (-half_b - discriminant_sqrt) / a
+	mut nearest_sqrt := (-half_b - discriminant_sqrt) / a
+	if nearest_sqrt < t_min || t_max < nearest_sqrt {
+		nearest_sqrt = (-half_b + discriminant_sqrt) / a
+		if nearest_sqrt < t_min || t_max < nearest_sqrt {
+			return false
+		}
+	}
 	hit_record.t = nearest_sqrt
 	hit_record.point = ray.at(nearest_sqrt)
 	outward_normal := (hit_record.point - s.center).divide(s.radius)
@@ -196,7 +190,8 @@ fn write_color(mut buffer []byte, rgb Vec3) {
 fn main() {
 	// World
 	mut world := HittableList{}
-	world.hittables << &Hittable(make_sphere(make_vec(f32(0), 0, -1), f32(0.5)))
+	world.hittables << &Hittable(make_sphere(make_vec(f32(0), 0, -1), 0.5))
+	world.hittables << &Hittable(make_sphere(make_vec(f32(0), -100.5, -1), 100))
 
 	// Camera
 	viewport_height := f32(2.0)
