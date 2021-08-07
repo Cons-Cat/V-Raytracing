@@ -106,14 +106,15 @@ fn (r Ray) hit_sphere(center Vec3, radius f32) f32 {
 	}
 }
 
-fn (r Ray) color(world &Hittable) Vec3 {
+fn (r Ray) color(hittable &Hittable) Vec3 {
 	mut hit_record := HitRecord{}
-	if world.hit(r, 0, f32(math.inf(1)), mut hit_record) {
-		return (hit_record.normal + make_vec(f32(1), 1, 1))
+	if hittable.hit(r, 0, f32(math.inf(1)), mut hit_record) {
+		return (hit_record.normal + make_vec(f32(1), 1, 1)).divide(2)
 	}
 
 	unit := r.direction.normalize()
 	t := (unit.y() + 1) / 2
+	// Return a background gradient
 	return make_vec(f32(1), 1, 1).scale(1 - t) + // Background blue
 	make_vec(f32(0.5), 0.7, 1.0).scale(t)
 }
@@ -154,13 +155,14 @@ fn (s Sphere) hit(ray &Ray, t_min f32, t_max f32, mut hit_record HitRecord) bool
 	half_b := dot(origin_center, ray.direction)
 	c := origin_center.len_squared() - s.radius * s.radius
 	discriminant := half_b * half_b - a * c
-	discriminant_sqrt := math.sqrtf(discriminant)
-	sqrt := (-half_b - discriminant_sqrt)
 	if discriminant < 0 {
+		// Skip points out of range.
 		return false
 	}
-	hit_record.t = sqrt
-	hit_record.point = ray.at(sqrt)
+	discriminant_sqrt := math.sqrtf(discriminant)
+	nearest_sqrt := (-half_b - discriminant_sqrt) / a
+	hit_record.t = nearest_sqrt
+	hit_record.point = ray.at(nearest_sqrt)
 	outward_normal := (hit_record.point - s.center).divide(s.radius)
 	hit_record.set_face_normal(ray, outward_normal)
 	return true
