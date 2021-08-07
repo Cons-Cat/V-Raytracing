@@ -52,6 +52,10 @@ fn (v Vec3) divide(t f32) Vec3 {
 	return v.scale((f32(1.0) / t))
 }
 
+fn (v Vec3) reverse() Vec3 {
+	return make_vec(-v.x(), -v.y(), -v.z())
+}
+
 fn (v Vec3) len_squared() f32 {
 	return v.x() * v.x() + v.y() * v.y() + v.z() * v.z()
 }
@@ -102,25 +106,30 @@ fn (r Ray) hit_sphere(center Vec3, radius f32) f32 {
 	}
 }
 
-fn (r Ray) color() Vec3 {
-	sphere := make_vec(f32(0), 0, -1)
-	mut t := r.hit_sphere(sphere, f32(0.5))
-	if t > 0 {
-		normal := (r.at(t) - sphere).normalize()
-		return make_vec(normal.x() + 1, normal.y() + 1, normal.z() + 1).divide(2)
+fn (r Ray) color(world &Hittable) Vec3 {
+	mut hit_record := HitRecord{}
+	if world.hit(r, 0, f32(math.inf(1)), mut hit_record) {
+		return (hit_record.normal + make_vec(f32(1), 1, 1))
 	}
 
 	unit := r.direction.normalize()
-	t = (unit.y() + 1) / 2
+	t := (unit.y() + 1) / 2
 	return make_vec(f32(1), 1, 1).scale(1 - t) + // Background blue
 	make_vec(f32(0.5), 0.7, 1.0).scale(t)
 }
 
 struct HitRecord {
 pub mut:
-	point  Vec3
-	normal Vec3
-	t      f32
+	point        Vec3
+	normal       Vec3
+	t            f32
+	facing_front bool
+}
+
+// TODO: When a V bug in fixed, outward_normal should be &Vec3
+fn (mut hr HitRecord) set_face_normal(ray &Ray, outward_normal Vec3) {
+	facing_front := dot(ray.direction, outward_normal) < 0
+	hr.normal = if facing_front { outward_normal } else { outward_normal.reverse() }
 }
 
 interface Hittable {
@@ -146,15 +155,34 @@ fn (s Sphere) hit(ray &Ray, t_min f32, t_max f32, mut hit_record HitRecord) bool
 	c := origin_center.len_squared() - s.radius * s.radius
 	discriminant := half_b * half_b - a * c
 	discriminant_sqrt := math.sqrtf(discriminant)
-	root := (-half_b - discriminant_sqrt)
+	sqrt := (-half_b - discriminant_sqrt)
 	if discriminant < 0 {
 		return false
-	} else {
-		hit_record.t = root
-		hit_record.point = ray.at(root)
-		hit_record.normal = (hit_record.point - s.center).divide(s.radius)
-		return true
 	}
+	hit_record.t = sqrt
+	hit_record.point = ray.at(sqrt)
+	outward_normal := (hit_record.point - s.center).divide(s.radius)
+	hit_record.set_face_normal(ray, outward_normal)
+	return true
+}
+
+struct HittableList {
+mut:
+	hittables []&Hittable
+}
+
+fn (hl HittableList) hit(ray &Ray, t_min f32, t_max f32, mut hit_record HitRecord) bool {
+	mut temp_record := HitRecord{}
+	mut hit_anything := false
+	mut closest_so_far := t_max
+	for hittable in hl.hittables {
+		if hittable.hit(ray, t_min, closest_so_far, mut temp_record) {
+			hit_anything = true
+			closest_so_far = temp_record.t
+			hit_record = temp_record
+		}
+	}
+	return hit_anything
 }
 
 fn write_color(mut buffer []byte, rgb Vec3) {
@@ -164,6 +192,10 @@ fn write_color(mut buffer []byte, rgb Vec3) {
 }
 
 fn main() {
+	// World
+	mut world := HittableList{}
+	world.hittables << &Hittable(make_sphere(make_vec(f32(0), 0, -1), f32(0.5)))
+
 	// Camera
 	viewport_height := f32(2.0)
 	viewport_width := aspect_ratio * viewport_height
@@ -183,7 +215,7 @@ fn main() {
 			u := f32(i) / (image_width - 1)
 			v := f32(j) / (image_height - 1)
 			r := make_ray(origin, lower_left_corner + horizontal.scale(u) + vertical.scale(v) - origin)
-			pixel_color := r.color()
+			pixel_color := r.color(world)
 			write_color(mut rgb_buffer, pixel_color)
 		}
 	}
