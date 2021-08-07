@@ -53,7 +53,7 @@ fn (v Vec3) divide(t f32) Vec3 {
 }
 
 fn (v Vec3) len_squared() f32 {
-   return v.x() * v.x() + v.y() * v.y() + v.z() * v.z()
+	return v.x() * v.x() + v.y() * v.y() + v.z() * v.z()
 }
 
 fn (v Vec3) len() f32 {
@@ -118,13 +118,13 @@ fn (r Ray) color() Vec3 {
 
 struct HitRecord {
 pub mut:
-	   point Vec3
-	   normal Vec3
-	   t f32
+	point  Vec3
+	normal Vec3
+	t      f32
 }
 
 interface Hittable {
-	hit(ray &Ray, t_min f32, t_max f32, mut hit_record &HitRecord) bool
+	hit(ray &Ray, t_min f32, t_max f32, mut hit_record HitRecord) bool
 }
 
 struct Sphere {
@@ -133,13 +133,13 @@ struct Sphere {
 }
 
 fn make_sphere(center Vec3, radius f32) Sphere {
-   return Sphere{
+	return Sphere{
 		center: center
 		radius: radius
 	}
 }
 
-fn (s Sphere) hit(ray &Ray, t_min f32, t_max f32, mut hit_record &HitRecord) bool {
+fn (s Sphere) hit(ray &Ray, t_min f32, t_max f32, mut hit_record HitRecord) bool {
 	origin_center := ray.origin - s.center
 	a := ray.direction.len_squared()
 	half_b := dot(origin_center, ray.direction)
@@ -150,7 +150,7 @@ fn (s Sphere) hit(ray &Ray, t_min f32, t_max f32, mut hit_record &HitRecord) boo
 	if discriminant < 0 {
 		return false
 	} else {
-	    hit_record.t = root
+		hit_record.t = root
 		hit_record.point = ray.at(root)
 		hit_record.normal = (hit_record.point - s.center).divide(s.radius)
 		return true
@@ -187,5 +187,5 @@ fn main() {
 			write_color(mut rgb_buffer, pixel_color)
 		}
 	}
-	kitty.print_rgb_at_point(rgb_buffer, u32(image_width), u32(image_height))
+	kitty.print_rgb_at_point(rgb_buffer, image_width, image_height)
 }
