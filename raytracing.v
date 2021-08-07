@@ -2,6 +2,7 @@ module main
 
 import math
 import kitty
+import time
 
 const (
 	aspect_ratio = f32(16.0) / 9.0
@@ -203,6 +204,7 @@ fn main() {
 	lower_left_corner := origin - horizontal.divide(2) - vertical.divide(2) - make_vec(f32(0),
 		0, focal_length)
 	// Rendering
+	timer := time.new_stopwatch()
 	// This cap initilization does not work correctly with TCC, but it does for Clang and GCC.
 	// mut rgb_buffer := []byte{len: 0, cap: image_width * image_height}
 	mut rgb_buffer := []byte{}
@@ -216,5 +218,7 @@ fn main() {
 			write_color(mut rgb_buffer, pixel_color)
 		}
 	}
+	time := timer.elapsed().milliseconds()
 	kitty.print_rgb_at_point(rgb_buffer, image_width, image_height)
+	println('\nImage rendered in $time ms')
 }
