@@ -11,6 +11,33 @@ const (
 	infinity     = f32(math.inf(1))
 )
 
+struct Camera {
+	origin            Vec3
+	lower_left_corner Vec3
+	horizontal        Vec3
+	vertical          Vec3
+	focal_length      f32
+}
+
+fn make_camera() Camera {
+	viewport_height := f32(2.0)
+	viewport_width := aspect_ratio * viewport_height
+	origin := make_vec(f32(0), 0, 0)
+	horizontal := make_vec(viewport_width, 0, 0)
+	vertical := make_vec(f32(0), -viewport_height, 0)
+	focal_length := f32(1.0)
+	camera := Camera{
+		focal_length: focal_length
+		origin: origin
+		horizontal: horizontal
+		vertical: vertical
+		lower_left_corner: origin - horizontal.divide(2) - vertical.divide(2) - make_vec(f32(0),
+			0, focal_length)
+	}
+
+	return camera
+}
+
 struct Vec3 {
 mut:
 	data [3]f32
@@ -183,10 +210,20 @@ fn (hl HittableList) hit(ray &Ray, t_min f32, t_max f32, mut hit_record HitRecor
 	return hit_anything
 }
 
-fn write_color(mut buffer []byte, rgb Vec3) {
-	buffer << byte(255.999 * rgb.x())
-	buffer << byte(255.999 * rgb.y())
-	buffer << byte(255.999 * rgb.z())
+fn write_color(i int, shared rgb_buffer []byte, rgb Vec3) {
+    rgb_buffer[i] = byte(255.999 * rgb.x())
+    rgb_buffer[i+1] = byte(255.999 * rgb.y())
+    rgb_buffer[i+2] = byte(255.999 * rgb.z())
+}
+
+fn ray_task(camera Camera, image_width f32, image_height f32, x int, y int, world HittableList, shared rgb_buffer []byte) {
+	// Baking UV pixels
+	u := f32(x) / (image_width - 1)
+	v := f32(y) / (image_height - 1)
+	r := make_ray(camera.origin, camera.lower_left_corner + camera.horizontal.scale(u) +
+		camera.vertical.scale(v) - camera.origin)
+	pixel_color := r.color(world)
+	write_color((int(x) + int(y * image_width))*3, shared rgb_buffer, pixel_color)
 }
 
 fn main() {
@@ -194,32 +231,21 @@ fn main() {
 	mut world := HittableList{}
 	world.hittables << &Hittable(make_sphere(make_vec(f32(0), 0, -1), 0.5))
 	world.hittables << &Hittable(make_sphere(make_vec(f32(0), -100.5, -1), 100))
-
 	// Camera
-	viewport_height := f32(2.0)
-	viewport_width := aspect_ratio * viewport_height
-	focal_length := f32(1.0)
-	origin := make_vec(f32(0), 0, 0)
-	horizontal := make_vec(viewport_width, 0, 0)
-	vertical := make_vec(f32(0), viewport_height, 0)
-	lower_left_corner := origin - horizontal.divide(2) - vertical.divide(2) - make_vec(f32(0),
-		0, focal_length)
+	camera := make_camera()
 	// Rendering
 	timer := time.new_stopwatch()
 	// This cap initilization does not work correctly with TCC, but it does for Clang and GCC.
-	// mut rgb_buffer := []byte{len: 0, cap: image_width * image_height}
-	mut rgb_buffer := []byte{}
+	shared rgb_buffer := []byte{len: image_width * image_height*3}
 	for j := image_height - 1; j >= 0; j-- {
 		for i := 0; i < image_width; i++ {
-			// Baking UV pixels
-			u := f32(i) / (image_width - 1)
-			v := f32(j) / (image_height - 1)
-			r := make_ray(origin, lower_left_corner + horizontal.scale(u) + vertical.scale(v) - origin)
-			pixel_color := r.color(world)
-			write_color(mut rgb_buffer, pixel_color)
+			// This can be parallellized by the 'go' keyword.
+			ray_task(camera, image_width, image_height, i, j, world, shared rgb_buffer)
 		}
 	}
 	time := timer.elapsed().milliseconds()
-	kitty.print_rgb_at_point(rgb_buffer, image_width, image_height)
+	rlock rgb_buffer{
+		kitty.print_rgb_at_point(rgb_buffer, image_width, image_height)
+	}
 	println('\nImage rendered in $time ms')
 }
