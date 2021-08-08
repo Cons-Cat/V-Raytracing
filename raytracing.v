@@ -26,16 +26,16 @@ struct Camera {
 fn make_camera() Camera {
 	viewport_height := f32(2.0)
 	viewport_width := aspect_ratio * viewport_height
-	origin := make_vec(f32(0), 0, 0)
+	origin := make_vec(0, 0, 0)
 	horizontal := make_vec(viewport_width, 0, 0)
-	vertical := make_vec(f32(0), -viewport_height, 0)
+	vertical := make_vec(0, -viewport_height, 0)
 	focal_length := f32(1.0)
 	camera := Camera{
 		focal_length: focal_length
 		origin: origin
 		horizontal: horizontal
 		vertical: vertical
-		lower_left_corner: origin - horizontal.divide(2) - vertical.divide(2) - make_vec(f32(0),
+		lower_left_corner: origin - horizontal.divide(2) - vertical.divide(2) - make_vec(0,
 			0, focal_length)
 		viewport_width: viewport_width
 		viewport_height: viewport_height
@@ -48,9 +48,9 @@ mut:
 	data [3]f32
 }
 
-fn make_vec(x f32, y f32, z f32) Vec3 {
+fn make_vec<T>(x T, y T, z T) Vec3 {
 	return Vec3{
-		data: [x, y, z]!
+		data: [f32(x), y, z]!
 	}
 }
 
@@ -131,14 +131,14 @@ fn (r Ray) color(hittable &Hittable) Vec3 {
 	mut hit_record := HitRecord{}
 	if hittable.hit(r, 0, infinity, mut hit_record) {
 		// Bring a normal from [-1, 1] into [0, 2] and then into [0, 1].
-		return (hit_record.normal + make_vec(f32(1), 1, 1)).divide(2)
+		return (hit_record.normal + make_vec(1, 1, 1)).divide(2)
 	}
 
 	// Make a background gradient if the ray hits nothing.
 	unit := r.direction.normalize()
 	t := (unit.y() + 1) / 2
-	return make_vec(f32(1), 1, 1).scale(1 - t) + // Background blue
-	make_vec(f32(0.5), 0.7, 1.0).scale(t)
+	return make_vec(1, 1, 1).scale(1 - t) + // Background blue
+	make_vec(0.5, 0.7, 1.0).scale(t)
 }
 
 struct HitRecord {
@@ -229,7 +229,7 @@ fn write_color(i int, shared rgb_buffer []byte, rgb Vec3) {
 
 fn ray_task(camera Camera, image_width f32, image_height f32, x int, y int, world HittableList, shared rgb_buffer []byte) {
 	// Sample UVs with white noise.
-	mut pixel_color := make_vec(f32(0), 0, 0)
+	mut pixel_color := make_vec(0, 0, 0)
 	for k := 0; k < sample_count; k++ {
 		u := (x + rand.f32() - 0.5) / (image_width - 1)
 		v := (y + rand.f32() - 0.5) / (image_height - 1)
@@ -245,8 +245,8 @@ fn ray_task(camera Camera, image_width f32, image_height f32, x int, y int, worl
 fn main() {
 	// World
 	mut world := HittableList{}
-	world.hittables << &Hittable(make_sphere(make_vec(f32(0), 0, -1), 0.5))
-	world.hittables << &Hittable(make_sphere(make_vec(f32(0), -100.5, -1), 100))
+	world.hittables << &Hittable(make_sphere(make_vec(0, 0, -1), 0.5))
+	world.hittables << &Hittable(make_sphere(make_vec(0, -100.5, -1), 100))
 	// Camera
 	camera := make_camera()
 	// Rendering
