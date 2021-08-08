@@ -3,20 +3,24 @@ module main
 import math
 import kitty
 import time
+import rand
 
 const (
 	aspect_ratio = f32(16.0) / 9.0
 	image_width  = 400
 	image_height = int(image_width / aspect_ratio)
 	infinity     = f32(math.inf(1))
+	sample_count = 10
 )
 
 struct Camera {
 	origin            Vec3
+	focal_length      f32
 	lower_left_corner Vec3
 	horizontal        Vec3
 	vertical          Vec3
-	focal_length      f32
+	viewport_width    f32
+	viewport_height   f32
 }
 
 fn make_camera() Camera {
@@ -33,8 +37,9 @@ fn make_camera() Camera {
 		vertical: vertical
 		lower_left_corner: origin - horizontal.divide(2) - vertical.divide(2) - make_vec(f32(0),
 			0, focal_length)
+		viewport_width: viewport_width
+		viewport_height: viewport_height
 	}
-
 	return camera
 }
 
@@ -111,9 +116,9 @@ pub:
 	direction Vec3
 }
 
-fn make_ray(ori Vec3, dir Vec3) Ray {
+fn make_ray(origin Vec3, dir Vec3) Ray {
 	return Ray{
-		origin: ori
+		origin: origin
 		direction: dir
 	}
 }
@@ -125,10 +130,11 @@ fn (r Ray) at(t f32) Vec3 {
 fn (r Ray) color(hittable &Hittable) Vec3 {
 	mut hit_record := HitRecord{}
 	if hittable.hit(r, 0, infinity, mut hit_record) {
+		// Bring a normal from [-1, 1] into [0, 2] and then into [0, 1].
 		return (hit_record.normal + make_vec(f32(1), 1, 1)).divide(2)
 	}
 
-	// Make a background gradient
+	// Make a background gradient if the ray hits nothing.
 	unit := r.direction.normalize()
 	t := (unit.y() + 1) / 2
 	return make_vec(f32(1), 1, 1).scale(1 - t) + // Background blue
@@ -210,22 +216,32 @@ fn (hl HittableList) hit(ray &Ray, t_min f32, t_max f32, mut hit_record HitRecor
 	return hit_anything
 }
 
+[direct_array_access]
 fn write_color(i int, shared rgb_buffer []byte, rgb Vec3) {
-    rgb_buffer[i] = byte(255.999 * rgb.x())
-    rgb_buffer[i+1] = byte(255.999 * rgb.y())
-    rgb_buffer[i+2] = byte(255.999 * rgb.z())
+	// Bring rgb into [0,1] by averaging the samples.
+	r := rgb.x() / sample_count
+	g := rgb.y() / sample_count
+	b := rgb.z() / sample_count
+	rgb_buffer[i] = byte(255 * math.min(r, 0.999))
+	rgb_buffer[i + 1] = byte(255 * math.min(g, 0.999))
+	rgb_buffer[i + 2] = byte(255 * math.min(b, 0.999))
 }
 
 fn ray_task(camera Camera, image_width f32, image_height f32, x int, y int, world HittableList, shared rgb_buffer []byte) {
-	// Baking UV pixels
-	u := f32(x) / (image_width - 1)
-	v := f32(y) / (image_height - 1)
-	r := make_ray(camera.origin, camera.lower_left_corner + camera.horizontal.scale(u) +
-		camera.vertical.scale(v) - camera.origin)
-	pixel_color := r.color(world)
-	write_color((int(x) + int(y * image_width))*3, shared rgb_buffer, pixel_color)
+	// Sample UVs with white noise.
+	mut pixel_color := make_vec(f32(0), 0, 0)
+	for k := 0; k < sample_count; k++ {
+		u := (x + rand.f32() - 0.5) / (image_width - 1)
+		v := (y + rand.f32() - 0.5) / (image_height - 1)
+		r := make_ray(camera.origin, camera.lower_left_corner + camera.horizontal.scale(u) +
+			camera.vertical.scale(v) - camera.origin)
+		pixel_color += r.color(world)
+	}
+	index_triple := 3 * (int(x) + int(y * image_width))
+	write_color(index_triple, shared rgb_buffer, pixel_color)
 }
 
+[direct_array_access]
 fn main() {
 	// World
 	mut world := HittableList{}
@@ -236,7 +252,7 @@ fn main() {
 	// Rendering
 	timer := time.new_stopwatch()
 	// This cap initilization does not work correctly with TCC, but it does for Clang and GCC.
-	shared rgb_buffer := []byte{len: image_width * image_height*3}
+	shared rgb_buffer := []byte{len: image_width * image_height * 3}
 	for j := image_height - 1; j >= 0; j-- {
 		for i := 0; i < image_width; i++ {
 			// This can be parallellized by the 'go' keyword.
@@ -244,7 +260,7 @@ fn main() {
 		}
 	}
 	time := timer.elapsed().milliseconds()
-	rlock rgb_buffer{
+	rlock rgb_buffer {
 		kitty.print_rgb_at_point(rgb_buffer, image_width, image_height)
 	}
 	println('\nImage rendered in $time ms')
