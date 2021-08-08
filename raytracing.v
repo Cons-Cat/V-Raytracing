@@ -144,20 +144,21 @@ fn (s Sphere) hit(ray &Ray, t_min f32, t_max f32, mut hit_record HitRecord) bool
 	half_b := dot(origin_center, ray.direction)
 	c := origin_center.len_squared() - s.radius * s.radius
 	discriminant := half_b * half_b - a * c
+	// If the discriminant is negative, this quadratic is unsolvable.
 	if discriminant < 0 {
-		// Skip points out of range.
 		return false
 	}
 	discriminant_sqrt := math.sqrtf(discriminant)
-	mut nearest_sqrt := (-half_b - discriminant_sqrt) / a
-	if nearest_sqrt < t_min || t_max < nearest_sqrt {
-		nearest_sqrt = (-half_b + discriminant_sqrt) / a
-		if nearest_sqrt < t_min || t_max < nearest_sqrt {
+	nearest_sqrt_minus := (-half_b - discriminant_sqrt) / a
+	// If the distance to this intersection is within bounds
+	if nearest_sqrt_minus < t_min || t_max < nearest_sqrt_minus {
+		nearest_sqrt_plus := (-half_b + discriminant_sqrt) / a
+		if nearest_sqrt_plus < t_min || t_max < nearest_sqrt_plus {
 			return false
 		}
 	}
-	hit_record.t = nearest_sqrt
-	hit_record.point = ray.at(nearest_sqrt)
+	hit_record.t = nearest_sqrt_minus
+	hit_record.point = ray.at(nearest_sqrt_minus)
 	outward_normal := (hit_record.point - s.center).divide(s.radius)
 	hit_record.set_face_normal(ray, outward_normal)
 	return true
