@@ -10,7 +10,8 @@ const (
 	image_width  = 400
 	image_height = int(image_width / aspect_ratio)
 	infinity     = f32(math.inf(1))
-	sample_count = 10
+	sample_count = 40
+	max_depth    = 50
 )
 
 struct Camera {
@@ -54,6 +55,11 @@ fn make_vec<T>(x T, y T, z T) Vec3 {
 	}
 }
 
+fn rand_vec<T>(min T, max T) Vec3 {
+	return make_vec(rand.f32_in_range(min, max), rand.f32_in_range(min, max), rand.f32_in_range(min,
+		max))
+}
+
 fn (v Vec3) x() f32 {
 	return v.data[0]
 }
@@ -78,12 +84,12 @@ fn (v Vec3) * (u Vec3) Vec3 {
 	return make_vec(v.x() * u.x(), v.y() * u.y(), v.z() * u.z())
 }
 
-fn (v Vec3) scale(t f32) Vec3 {
-	return make_vec(v.x() * t, v.y() * t, v.z() * t)
+fn (v Vec3) scale<T>(t T) Vec3 {
+	return make_vec(v.x() * f32(t), v.y() * f32(t), v.z() * f32(t))
 }
 
-fn (v Vec3) divide(t f32) Vec3 {
-	return v.scale((f32(1.0) / t))
+fn (v Vec3) divide<T>(t T) Vec3 {
+	return v.scale(1 / f32(t))
 }
 
 fn (v Vec3) reverse() Vec3 {
@@ -110,6 +116,13 @@ fn (v Vec3) normalize() Vec3 {
 	return v.divide(v.len())
 }
 
+fn make_sphere(center Vec3, radius f32) Sphere {
+	return Sphere{
+		center: center
+		radius: radius
+	}
+}
+
 struct Ray {
 pub:
 	origin    Vec3
@@ -119,7 +132,7 @@ pub:
 fn make_ray(origin Vec3, dir Vec3) Ray {
 	return Ray{
 		origin: origin
-		direction: dir
+		direction: dir.normalize()
 	}
 }
 
@@ -127,17 +140,30 @@ fn (r Ray) at(t f32) Vec3 {
 	return r.origin + r.direction.scale(t)
 }
 
-fn (r Ray) color(hittable &Hittable) Vec3 {
-	mut hit_record := HitRecord{}
-	if hittable.hit(r, 0, infinity, mut hit_record) {
-		// Bring a normal from [-1, 1] into [0, 2] and then into [0, 1].
-		return (hit_record.normal + make_vec(1, 1, 1)).divide(2)
+fn rand_point_in_unit_sphere() Vec3 {
+	for {
+		point := rand_vec(-1, 1)
+		if point.len_squared() >= 1 {
+			continue
+		}
+		return point
 	}
+	panic('What')
+}
 
+fn (r Ray) color(hittable &Hittable, depth int) Vec3 {
+	if depth <= 0 {
+		return make_vec(0, 0, 0)
+	}
+	mut hit_record := HitRecord{}
+	if hittable.hit(r, 0, infinity, mut &hit_record) {
+		scatter_direction := hit_record.normal + rand_point_in_unit_sphere()
+		return make_ray(hit_record.point, scatter_direction).color(hittable, depth - 1).divide(2)
+	}
 	// Make a background gradient if the ray hits nothing.
 	unit := r.direction.normalize()
 	t := (unit.y() + 1) / 2
-	return make_vec(1, 1, 1).scale(1 - t) + // Background blue
+	return make_vec(1, 1, 1).scale(1 - t) + // Sky blue
 	make_vec(0.5, 0.7, 1.0).scale(t)
 }
 
@@ -162,13 +188,6 @@ interface Hittable {
 struct Sphere {
 	center Vec3
 	radius f32
-}
-
-fn make_sphere(center Vec3, radius f32) Sphere {
-	return Sphere{
-		center: center
-		radius: radius
-	}
 }
 
 fn (s Sphere) hit(ray &Ray, t_min f32, t_max f32, mut hit_record HitRecord) bool {
@@ -207,7 +226,7 @@ fn (hl HittableList) hit(ray &Ray, t_min f32, t_max f32, mut hit_record HitRecor
 	mut hit_anything := false
 	mut closest_so_far := t_max
 	for hittable in hl.hittables {
-		if hittable.hit(ray, t_min, closest_so_far, mut temp_record) {
+		if hittable.hit(ray, t_min, closest_so_far, mut &temp_record) {
 			hit_anything = true
 			closest_so_far = temp_record.t
 			hit_record = temp_record
@@ -222,20 +241,27 @@ fn write_color(i int, shared rgb_buffer []byte, rgb Vec3) {
 	r := rgb.x() / sample_count
 	g := rgb.y() / sample_count
 	b := rgb.z() / sample_count
-	rgb_buffer[i] = byte(255 * math.min(r, 0.999))
-	rgb_buffer[i + 1] = byte(255 * math.min(g, 0.999))
-	rgb_buffer[i + 2] = byte(255 * math.min(b, 0.999))
+
+	// Divide the color by the number of samples and gamma-correct for gamma=2.0.
+	r_gamma := math.sqrt(r)
+	g_gamma := math.sqrt(g)
+	b_gamma := math.sqrt(b)
+
+	rgb_buffer[i] = byte(255 * math.min(r_gamma, 0.999))
+	rgb_buffer[i + 1] = byte(255 * math.min(g_gamma, 0.999))
+	rgb_buffer[i + 2] = byte(255 * math.min(b_gamma, 0.999))
 }
 
 fn ray_task(camera Camera, image_width f32, image_height f32, x int, y int, world HittableList, shared rgb_buffer []byte) {
 	// Sample UVs with white noise.
 	mut pixel_color := make_vec(0, 0, 0)
 	for k := 0; k < sample_count; k++ {
+		// TODO: Should this be parallellized?
 		u := (x + rand.f32() - 0.5) / (image_width - 1)
 		v := (y + rand.f32() - 0.5) / (image_height - 1)
 		r := make_ray(camera.origin, camera.lower_left_corner + camera.horizontal.scale(u) +
 			camera.vertical.scale(v) - camera.origin)
-		pixel_color += r.color(world)
+		pixel_color += r.color(world, max_depth)
 	}
 	index_triple := 3 * (int(x) + int(y * image_width))
 	write_color(index_triple, shared rgb_buffer, pixel_color)
@@ -256,7 +282,11 @@ fn main() {
 	for j := image_height - 1; j >= 0; j-- {
 		for i := 0; i < image_width; i++ {
 			// This can be parallellized by the 'go' keyword.
-			ray_task(camera, image_width, image_height, i, j, world, shared rgb_buffer)
+			$if prod {
+				ray_task(camera, image_width, image_height, i, j, world, shared rgb_buffer)
+			} $else {
+				go ray_task(camera, image_width, image_height, i, j, world, shared rgb_buffer)
+			}
 		}
 	}
 	time := timer.elapsed().milliseconds()
